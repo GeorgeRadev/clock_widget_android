@@ -4,7 +4,9 @@
 
     <!-- Package visibility for launching clock / calendar / Play Store. -->
     <queries>
+        <package android:name="com.google.android.deskclock" />
         <package android:name="com.android.deskclock" />
+        <package android:name="com.sec.deskclock" />
         <package android:name="com.android.calendar" />
         <package android:name="com.android.vending" />
         <intent>

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">ClockWidget</string>
+    <string name="widget_description">Shows the current time and date</string>
+    <string name="placeholder_time">12:00</string>
+    <string name="placeholder_date">Oct 24</string>
+    <string name="widget_time_content_description">Current time. Opens the clock app.</string>
+    <string name="widget_date_content_description">Current date. Opens the calendar app.</string>
+</resources>

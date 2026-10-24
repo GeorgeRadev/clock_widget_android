@@ -1,5 +1,6 @@
 package org.widget.clock;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -9,6 +10,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -25,19 +27,37 @@ public class ClockWidgetProvider extends AppWidgetProvider {
     private static final float TIME_DATE_RATIO = 0.44f;   // time, date visible
     private static final float DATE_RATIO = 0.26f;        // date
 
+    // Refresh cadence. Android 12+ ignores updatePeriodMillis below 30 min
+    // for apps targeting API 31+, so a self-rescheduling alarm drives the
+    // minute refresh instead. The first tick lands on the next minute
+    // boundary so the widget never lags the real clock.
+    private static final String ACTION_TICK = "org.widget.clock.TICK";
+    private static final int TICK_REQUEST_CODE = 1;
+
     @Override
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
+        String action = intent.getAction();
         // Refresh when the clock changes (time, timezone, locale).
-        if (Intent.ACTION_TIME_CHANGED.equals(intent.getAction())
-                || Intent.ACTION_TIMEZONE_CHANGED.equals(intent.getAction())
-                || Intent.ACTION_LOCALE_CHANGED.equals(intent.getAction())) {
+        if (Intent.ACTION_TIME_CHANGED.equals(action)
+                || Intent.ACTION_TIMEZONE_CHANGED.equals(action)
+                || Intent.ACTION_LOCALE_CHANGED.equals(action)
+                || ACTION_TICK.equals(action)) {
+            if (ACTION_TICK.equals(action)) {
+                // Re-align to the next minute boundary: alarms are inexact
+                // and can land late, so a fixed +60 s reschedule would drift
+                // further behind the wall clock with every tick.
+                scheduleTick(context, delayUntilNextMinute());
+            }
             updateAllWidgets(context);
         }
     }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+        // (Re)start the minute refresh; also covers the update broadcast
+        // the system sends after a reboot, when alarms have been lost.
+        scheduleTick(context, delayUntilNextMinute());
         for (int appWidgetId : appWidgetIds) {
             updateWidget(context, appWidgetManager, appWidgetId);
         }
@@ -47,6 +67,12 @@ public class ClockWidgetProvider extends AppWidgetProvider {
     public void onEnabled(Context context) {
         // First widget placed: make sure it shows the current time.
         updateAllWidgets(context);
+    }
+
+    @Override
+    public void onDisabled(Context context) {
+        // Last widget removed: no need to keep ticking.
+        cancelTick(context);
     }
 
     @Override
@@ -63,6 +89,30 @@ public class ClockWidgetProvider extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             updateWidget(context, manager, appWidgetId);
         }
+    }
+
+    private static void scheduleTick(Context context, long delayMs) {
+        AlarmManager alarmManager =
+                (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + delayMs, tickPendingIntent(context));
+    }
+
+    /** 1-60 s until the wall clock rolls to the next minute. */
+    private static long delayUntilNextMinute() {
+        return (60 - (System.currentTimeMillis() / 1000) % 60) * 1000L;
+    }
+
+    private static void cancelTick(Context context) {
+        AlarmManager alarmManager =
+                (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        alarmManager.cancel(tickPendingIntent(context));
+    }
+
+    private static PendingIntent tickPendingIntent(Context context) {
+        return PendingIntent.getBroadcast(context, TICK_REQUEST_CODE,
+                new Intent(context, ClockWidgetProvider.class).setAction(ACTION_TICK),
+                pendingFlags());
     }
 
     private static void updateWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {

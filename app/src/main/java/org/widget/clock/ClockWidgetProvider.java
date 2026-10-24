@@ -8,8 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
-import android.view.View;
 import android.widget.RemoteViews;
 
 import java.text.SimpleDateFormat;
@@ -17,11 +15,6 @@ import java.util.Date;
 import java.util.Locale;
 
 public class ClockWidgetProvider extends AppWidgetProvider {
-
-    // Roughly two launcher rows: below this the widget is one row tall and
-    // only the time is shown. Cell size varies per launcher, so this is an
-    // approximation that works across common ones.
-    private static final int DATE_VISIBLE_MIN_HEIGHT_DP = 120;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -47,18 +40,6 @@ public class ClockWidgetProvider extends AppWidgetProvider {
         updateAllWidgets(context);
     }
 
-    @Override
-    public void onResize(Context context, int appWidgetId, Bundle options) {
-        super.onResize(context, appWidgetId, options);
-        updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId);
-    }
-
-    @Override
-    public void onAppWidgetOptionsChanged(Context context, int appWidgetId, Bundle appWidgetOptions) {
-        super.onAppWidgetOptionsChanged(context, appWidgetId, appWidgetOptions);
-        updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId);
-    }
-
     private static void updateAllWidgets(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         ComponentName component = new ComponentName(context, ClockWidgetProvider.class);
@@ -69,14 +50,6 @@ public class ClockWidgetProvider extends AppWidgetProvider {
     }
 
     private static void updateWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
-        // Min height (dp) is the safe side: text sized to fit the smallest
-        // allowed height also fits when the user stretches the widget.
-        Bundle options = appWidgetManager.getAppWidgetOptions(appWidgetId);
-        int minHeightDp = options != null
-                ? options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-                : 0;
-        boolean showDate = minHeightDp >= DATE_VISIBLE_MIN_HEIGHT_DP;
-
         Date now = new Date();
         SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
         SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd", Locale.getDefault());
@@ -84,24 +57,11 @@ public class ClockWidgetProvider extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.clock_widget);
         views.setTextViewText(R.id.widget_time, timeFormat.format(now));
         views.setTextViewText(R.id.widget_date, dateFormat.format(now));
-        views.setInt(R.id.widget_date, "setVisibility", showDate ? View.VISIBLE : View.GONE);
-
-        // Scale font with the available height.
-        int timeSize = showDate
-                ? clamp(minHeightDp * 3 / 10, 26, 72)   // room for two lines
-                : clamp(minHeightDp * 9 / 20, 24, 64);  // time fills the row
-        int dateSize = clamp(minHeightDp / 6, 14, 40);
-        views.setInt(R.id.widget_time, "setTextSize", timeSize);
-        views.setInt(R.id.widget_date, "setTextSize", dateSize);
 
         views.setOnClickPendingIntent(R.id.widget_time, buildClockIntent(context, appWidgetId));
         views.setOnClickPendingIntent(R.id.widget_date, buildCalendarIntent(context, appWidgetId));
 
         appWidgetManager.updateAppWidget(appWidgetId, views);
-    }
-
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
     }
 
     private static PendingIntent buildClockIntent(Context context, int appWidgetId) {
